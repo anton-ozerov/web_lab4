@@ -427,6 +427,12 @@ class WeatherApp {
     render_weather(weather_data, location_name) {
         const forecasts_to_show = weather_data.forecasts.slice(0, 4);
 
+        forecasts_to_show.forEach((f) => {
+            if (f.icon_url) {
+                const img = new Image();
+                img.src = f.icon_url;
+            }
+        });
         const forecast_html = forecasts_to_show
             .map(
                 (forecast) => `
@@ -435,7 +441,7 @@ class WeatherApp {
                     ${this.format_date(forecast.date)}
                 </div>
                 <div class="weather-icon">
-                    <img src="${forecast.icon_url}" alt="Погода">
+                    <img src="${forecast.icon_url}" alt="Погода" loading="lazy" decoding="async" width="80" height="80">
                     <div class="weather-desc">
                         ${this.getWeatherDescription(forecast.weather_code)}
                     </div>
