@@ -1,6 +1,7 @@
 class WeatherApp {
     constructor() {
         this.API_BASE_URL = "https://web-lab-4-seerb.amvera.io/weather";
+        this.FETCH_TIMEOUT_MS = 10000;
         this.current_location = null;
         this.locations = [];
         this.current_tab = null;
@@ -289,13 +290,25 @@ class WeatherApp {
     }
 
     async load_weather_for_location(location) {
-        this.show_loading();
+        if (!this.is_loading) this.show_loading();
 
         try {
             const url = `${this.API_BASE_URL}?latitude=${location.coords.latitude}&longitude=${location.coords.longitude}`;
-            const resp = await fetch(url);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.FETCH_TIMEOUT_MS);
+
+            const resp = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
 
             const resp_data = await resp.json();
+
+            if (!resp_data || !Array.isArray(resp_data.forecasts) || resp_data.forecasts.length === 0) {
+                throw new Error("Некорректный ответ сервера");
+            }
 
             location.weatherData = resp_data;
             this.save_to_storage();
@@ -305,9 +318,15 @@ class WeatherApp {
             }
 
             this.show_weather_container();
+            return true;
         } catch (error) {
             console.error("Ошибка загрузки погоды:", error);
-            this.show_error("Не удалось загрузить прогноз погоды");
+            if (error?.name === "AbortError") {
+                this.show_error("Превышено время ожидания ответа от сервера");
+            } else {
+                this.show_error("Не удалось загрузить прогноз погоды");
+            }
+            return false;
         }
     }
 
@@ -315,22 +334,19 @@ class WeatherApp {
         this.show_loading();
 
         try {
-            const promises = this.locations.map((location) =>
-                this.load_weather_for_location(location)
+            const results = await Promise.all(
+                this.locations.map((location) => this.load_weather_for_location(location))
             );
 
-            await Promise.all(promises);
+            const anySuccess = results.some(Boolean);
+            const current_loc = this.locations.find((loc) => loc.id === this.current_tab);
 
-            if (this.current_tab) {
-                const current_loc = this.locations.find(
-                    (loc) => loc.id === this.current_tab
-                );
-                if (current_loc && current_loc.weatherData) {
-                    this.render_weather(current_loc.weatherData, current_loc.name);
-                }
+            if (anySuccess && current_loc && current_loc.weatherData) {
+                this.render_weather(current_loc.weatherData, current_loc.name);
+                this.show_weather_container();
+            } else {
+                this.show_error("Не удалось загрузить прогноз погоды");
             }
-
-            this.show_weather_container();
         } catch (error) {
             console.error("Ошибка загрузки погоды:", error);
             this.show_error("Не удалось загрузить прогноз погоды");
