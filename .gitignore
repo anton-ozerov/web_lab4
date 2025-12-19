@@ -1,0 +1,12 @@
+.idea
+/.venv
+
+.env
+.pytest_cache
+/logs
+
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pypackages__/
